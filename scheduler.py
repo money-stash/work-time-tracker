@@ -3,11 +3,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aiogram import Bot
 
-from config import ADMIN_ID
+from config import ADMIN_ID, TIMEZONE
 from storage import load_data, get_session, update_session, reset_session
 from database import record_session_start, record_session_end, record_day_complete
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 _bot: Bot = None
 _session_task: asyncio.Task = None
 _current_session_db_id: int = None
@@ -94,7 +94,7 @@ def reschedule_daily():
     hour, minute = data["work_start_time"].split(":")
     scheduler.add_job(
         send_work_start_prompt,
-        CronTrigger(hour=int(hour), minute=int(minute)),
+        CronTrigger(hour=int(hour), minute=int(minute), timezone=TIMEZONE),
         id="work_start",
         replace_existing=True
     )

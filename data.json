@@ -1,0 +1,12 @@
+{
+  "work_start_time": "18:55",
+  "work_duration_minutes": 120,
+  "session_minutes": 30,
+  "break_minutes": 10,
+  "warning_before_end_minutes": 3,
+  "session": {
+    "active": false,
+    "completed_minutes": 0,
+    "state": "idle"
+  }
+}

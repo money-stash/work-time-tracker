@@ -2,8 +2,21 @@ import sqlite3
 import os
 from datetime import datetime, date, timedelta
 from contextlib import contextmanager
+from zoneinfo import ZoneInfo
+
 
 DB_FILE = "workbot.db"
+
+
+def _now() -> datetime:
+    from config import TIMEZONE
+    return datetime.now(TIMEZONE)
+
+
+def _today() -> str:
+    from config import TIMEZONE
+    return datetime.now(TIMEZONE).date().isoformat()
+
 
 @contextmanager
 def get_conn():
@@ -15,6 +28,7 @@ def get_conn():
     finally:
         conn.close()
 
+        
 def init_db():
     with get_conn() as conn:
         conn.execute("""
@@ -41,8 +55,10 @@ def init_db():
             )
         """)
 
+        
+        
 def get_or_create_today() -> int:
-    today = date.today().isoformat()
+    today = _today()
     with get_conn() as conn:
         row = conn.execute("SELECT id FROM work_days WHERE date = ?", (today,)).fetchone()
         if row:
@@ -51,26 +67,28 @@ def get_or_create_today() -> int:
         planned = get_setting("work_duration_minutes")
         conn.execute(
             "INSERT INTO work_days (date, planned_minutes, started_at) VALUES (?, ?, ?)",
-            (today, planned, datetime.now().isoformat())
+            (today, planned, _now().isoformat())
         )
         return conn.execute("SELECT id FROM work_days WHERE date = ?", (today,)).fetchone()["id"]
+
 
 def record_session_start(session_number: int, duration_minutes: int) -> int:
     day_id = get_or_create_today()
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO work_sessions (work_day_id, session_number, duration_minutes, started_at) VALUES (?, ?, ?, ?)",
-            (day_id, session_number, duration_minutes, datetime.now().isoformat())
+            (day_id, session_number, duration_minutes, _now().isoformat())
         )
         return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
+
 def record_session_end(session_id: int, duration_minutes: int):
     day_id = get_or_create_today()
-    today = date.today().isoformat()
+    today = _today()
     with get_conn() as conn:
         conn.execute(
             "UPDATE work_sessions SET finished_at = ? WHERE id = ?",
-            (datetime.now().isoformat(), session_id)
+            (_now().isoformat(), session_id)
         )
         conn.execute("""
             UPDATE work_days
@@ -79,17 +97,19 @@ def record_session_end(session_id: int, duration_minutes: int):
             WHERE date = ?
         """, (duration_minutes, today))
 
+        
 def record_day_complete(total_minutes: int):
-    today = date.today().isoformat()
+    today = _today()
     with get_conn() as conn:
         conn.execute("""
             UPDATE work_days
             SET completed = 1, finished_at = ?, worked_minutes = ?
             WHERE date = ?
-        """, (datetime.now().isoformat(), total_minutes, today))
+        """, (_now().isoformat(), total_minutes, today))
 
+        
 def get_stats_today() -> dict:
-    today = date.today().isoformat()
+    today = _today()
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM work_days WHERE date = ?", (today,)).fetchone()
         if not row:
@@ -110,14 +130,18 @@ def get_stats_today() -> dict:
             "sessions": [dict(s) for s in sessions]
         }
 
+
 def get_stats_week() -> dict:
-    today = date.today()
+    from config import TIMEZONE
+    today = datetime.now(TIMEZONE).date()
     monday = today - timedelta(days=today.weekday())
     days = [(monday + timedelta(days=i)).isoformat() for i in range(7)]
     return _get_stats_for_dates(days, "неделя")
 
+
 def get_stats_month() -> dict:
-    today = date.today()
+    from config import TIMEZONE
+    today = datetime.now(TIMEZONE).date()
     days = []
     d = today.replace(day=1)
     while d.month == today.month:
@@ -125,10 +149,13 @@ def get_stats_month() -> dict:
         d += timedelta(days=1)
     return _get_stats_for_dates(days, "месяц")
 
+
 def get_stats_custom(days_back: int) -> dict:
-    today = date.today()
+    from config import TIMEZONE
+    today = datetime.now(TIMEZONE).date()
     days = [(today - timedelta(days=i)).isoformat() for i in range(days_back - 1, -1, -1)]
     return _get_stats_for_dates(days, f"последние {days_back} дней")
+
 
 def _get_stats_for_dates(dates: list, period_name: str) -> dict:
     placeholders = ",".join("?" * len(dates))
@@ -158,6 +185,7 @@ def _get_stats_for_dates(dates: list, period_name: str) -> dict:
         "total_days": len(dates)
     }
 
+
 def get_all_time_stats() -> dict:
     with get_conn() as conn:
         row = conn.execute("""
@@ -171,3 +199,6 @@ def get_all_time_stats() -> dict:
             FROM work_days WHERE worked_minutes > 0
         """).fetchone()
     return dict(row) if row else {}
+
+
+    
